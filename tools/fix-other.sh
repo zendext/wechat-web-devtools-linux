@@ -7,6 +7,23 @@ srcdir=$root_dir
 tmp_dir="$root_dir/tmp"
 package_dir="$root_dir/resources/app.asar.unpacked"
 
+# Windows 安装包只包含 Windows 的 SWC binding，补齐相同版本的 Linux 文件。
+arch=$(node "$root_dir/tools/parse-config.js" --get-arch "$@")
+if [[ "$arch" == "x64" || "$arch" == "arm64" ]] && [ -f "$package_dir/node_modules/@swc/core/package.json" ]; then
+  swc_version=$(node -p 'require(process.argv[1]).version' "$package_dir/node_modules/@swc/core/package.json")
+  swc_archive="$root_dir/cache/swc-core-linux-${arch}-gnu-${swc_version}.tgz"
+  if [ ! -f "$swc_archive" ]; then
+    mkdir -p "$root_dir/cache"
+    npm pack "@swc/core-linux-${arch}-gnu@${swc_version}" \
+      --ignore-scripts --registry=https://registry.npmmirror.com --pack-destination "$root_dir/cache"
+  fi
+  "$root_dir/tools/asar-helper.sh" unpack
+  swc_binding="$root_dir/resources/app/node_modules/@swc/core/swc.linux-${arch}-gnu.node"
+  tar -xOf "$swc_archive" "package/swc.linux-${arch}-gnu.node" > "$swc_binding.tmp"
+  mv "$swc_binding.tmp" "$swc_binding"
+  "$root_dir/tools/asar-helper.sh" pack
+fi
+
 # 修复mock按钮无反应
 # sed -i '1s/^/window.prompt = parent.prompt;\n/' "${package_dir}/js/ideplugin/devtools/index.js"
 
